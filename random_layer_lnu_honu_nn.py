@@ -43,13 +43,12 @@ class RandomLayer_LNU_HONU_NN:
         
         self.error = np.array([])
         
-        self.derivative_matrix = []
-        self.w_symbols = []
-        self.X_symbols = []
+        self.delta_LNU = []
+        self.delta_HONU = []
         
         if params == None:
-            self.N_random = 100
-            self.N_LNU = 20
+            self.N_random = 20
+            self.N_LNU = 5
             self.N_HONU = 1
             self.HONU_order = 2
             self.learning_rate = 0.001
@@ -83,13 +82,13 @@ class RandomLayer_LNU_HONU_NN:
         return data
             
     def initiate_weights(self, X):
-        self.random_weights = np.random.uniform(0, 1, (self.N_random, len(X)))/100 # Initiate random weights with uniform distribution
-        self.LNU_weights = np.random.randn(self.N_LNU, int(self.N_random / self.N_LNU))/100
+        self.random_weights = np.random.uniform(-1, 1, (self.N_random, len(X)))#/self.N_random # Initiate random weights with uniform distribution
+        self.LNU_weights = np.random.randn(self.N_LNU, int(self.N_random / self.N_LNU))#/self.N_LNU
         # self.HONU_weights = np.random.randn(math.comb(int(self.N_random / self.N_LNU) +self.HONU_order-1, self.HONU_order))/100
-        self.HONU_weights = np.random.randn(math.comb(self.N_LNU +self.HONU_order-1, self.HONU_order))/100        
+        self.HONU_weights = np.random.randn(math.comb(self.N_LNU +self.HONU_order-1, self.HONU_order))     
         
     def RandomLayer_ff(self, X):
-        self.random_output = np.dot(self.random_weights, X)
+        self.random_output = np.tanh(np.dot(self.random_weights, X))
             
     def create_HONU(self, X):
         X_HONU = np.prod(np.asarray(list(itertools.combinations_with_replacement(X, self.HONU_order))), axis = 1)
@@ -100,7 +99,7 @@ class RandomLayer_LNU_HONU_NN:
         M = int(self.N_random / self.N_LNU)
         self.LNU_input = np.asarray([X[i-M:i] for i in range(M, len(X)+1, M)])
         
-        self.LNU_output = np.sum(np.dot(self.LNU_weights, self.LNU_input.T), axis = 1)
+        self.LNU_output = np.tanh(np.sum(np.dot(self.LNU_weights, self.LNU_input.T), axis = 1))
             
     def LNULayer_bp(self, X):
         
@@ -118,40 +117,48 @@ class RandomLayer_LNU_HONU_NN:
             
             sb = np.zeros((len(x), len(x), M))
             
-            mp1 = np.multiply(np.ones(x.shape) * x[0, :], y[:, np.newaxis]) # y1X1, y2X1, y3X1, ...
+            mp1 = np.multiply(np.multiply(np.ones(x.shape) * x[0, :], y[:, np.newaxis]), (1-np.tanh(y*y)**2)[:, np.newaxis]) # y1X1, y2X1, y3X1, ...
             # mp1 = (np.ones(x.shape) * x[0, :]) * y
             
             sb[:, 0, :] = mp1 # add to first column
             
-            mp2 = np.multiply(x, y[0, np.newaxis])
+            mp2 = np.multiply(np.multiply(x, y[0, np.newaxis]), (1-np.tanh(y*y)**2)[:, np.newaxis])
             for j in range(len(x)):
                 sb[j, j, :] += mp2[j, :]
             
             dercolX[group : group+len(x), i:, :] = sb
             group += len(x) 
         
-        self.LNU_weights += (self.learning_rate / self.error**2) * self.error * np.tensordot(self.HONU_weights, dercolX, axes=1)
+        # self.LNU_weights += (self.learning_rate / self.error**2) * self.error * np.tensordot(self.HONU_weights, dercolX, axes=1)
+        self.LNU_weights += (self.learning_rate ) * self.error * np.tensordot(self.HONU_weights, dercolX, axes=1)
+        self.delta_LNU.append(self.LNU_weights)
         
     def HONULayer_ff(self, X):
         self.HONU_input = self.create_HONU(X)
         self.HONU_output = np.dot(self.HONU_weights, self.HONU_input)
             
     def HONULayer_bp(self, X):
-        self.HONU_weights += (self.learning_rate/self.error**2) * self.error * self.HONU_input
+
+        # self.HONU_weights += (self.learning_rate/self.error**2) * self.error * self.HONU_input
+        self.HONU_weights += (self.learning_rate) * self.error * self.HONU_input
+        self.delta_HONU.append(self.HONU_weights)
         # self.HONU_weights += (self.learning_rate/self.error**2) * self.error * self.create_HONU(self.LNU_output)
             
     def fit(self, X, y):
         self.initiate_weights(X[0, :])
-        for i in range(len(X)):
-            self.RandomLayer_ff(X[i, :])
-            self.LNULayer_ff(self.random_output)
-            self.HONULayer_ff(self.LNU_output)
-            
-            self.error = y[i] - self.HONU_output
-            
-            self.HONULayer_bp(X[i, :])
-            self.LNULayer_bp(X[i, :])
-            
+        error = []
+        for i in range(50):
+            for i in range(len(X)):
+                self.RandomLayer_ff(X[i, :])
+                self.LNULayer_ff(self.random_output)
+                self.HONULayer_ff(self.LNU_output)
+                
+                self.error = y[i] - self.HONU_output
+                error.append(self.error)
+                
+                self.HONULayer_bp(X[i, :])
+                self.LNULayer_bp(X[i, :])
+        return error
             
     def predict(self, X, y):
         predicted = np.zeros(len(X))
@@ -177,7 +184,7 @@ with open('MISO_dict.pkl', 'rb') as f:
     data = pickle.load(f)
 
 model = RandomLayer_LNU_HONU_NN()
-data1 = model.create_state(np.c_[data['u1'], data['u2']], data['output'][0][:, 1], nu = 50, ny = 30, hp = 3)
+data1 = model.create_state(np.c_[data['u1'], data['u2']], data['output'][0][:, 1], nu = 10, ny = 20, hp = 5)
 scaler = MinMaxScaler((0,1))
 data = scaler.fit_transform(data1)
 
@@ -187,9 +194,16 @@ y_train = data[:5000, -1]
 X_test = data[5000:, :-1]
 y_test = data[5000:, -1]
 
-model.fit(X_train, y_train)
-predicted, error = model.predict(X_test, y_test)
+error = model.fit(X_train, y_train)
+predicted, err = model.predict(X_test, y_test)
 plt.figure()
 plt.plot(predicted, label='pred')
 plt.plot(y_test, label = 'true')
 plt.legend()
+
+plt.figure()
+plt.plot(error)
+
+fig, ax = plt.subplots(2)
+ax[0].plot(np.array(model.delta_LNU).reshape(-1))
+ax[1].plot(np.asarray(model.delta_HONU).reshape(-1))
