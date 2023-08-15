@@ -47,8 +47,8 @@ class RandomLayer_LNU_HONU_NN:
         self.delta_HONU = []
         
         if params == None:
-            self.N_random = 20
-            self.N_LNU = 5
+            self.N_random = 100
+            self.N_LNU = 10
             self.N_HONU = 1
             self.HONU_order = 2
             self.learning_rate = 0.001
@@ -130,7 +130,7 @@ class RandomLayer_LNU_HONU_NN:
             group += len(x) 
         
         # self.LNU_weights += (self.learning_rate / self.error**2) * self.error * np.tensordot(self.HONU_weights, dercolX, axes=1)
-        self.LNU_weights += (self.learning_rate ) * self.error * np.tensordot(self.HONU_weights, dercolX, axes=1)
+        self.LNU_weights += (self.learning_rate/10 ) * self.error * np.tensordot(self.HONU_weights, dercolX, axes=1)
         self.delta_LNU.append(self.LNU_weights)
         
     def HONULayer_ff(self, X):
@@ -147,7 +147,7 @@ class RandomLayer_LNU_HONU_NN:
     def fit(self, X, y):
         self.initiate_weights(X[0, :])
         error = []
-        for i in range(50):
+        for i in range(500):
             for i in range(len(X)):
                 self.RandomLayer_ff(X[i, :])
                 self.LNULayer_ff(self.random_output)
@@ -174,25 +174,21 @@ class RandomLayer_LNU_HONU_NN:
             err[i] = self.error
         return predicted, err
         
-# X = np.random.randn(100, 5)
-# y = np.random.randn(100)
 
-# model = RandomLayer_LNU_HONU_NN()
-# model.fit(X, y)
-# model.predict()
-with open('MISO_dict.pkl', 'rb') as f:
-    data = pickle.load(f)
+x = np.arange(-5, 5, 0.01)
+y = x**3 + (x+0.5)**2 + 0.1*x + np.random.normal(size = x.size)
 
 model = RandomLayer_LNU_HONU_NN()
-data1 = model.create_state(np.c_[data['u1'], data['u2']], data['output'][0][:, 1], nu = 10, ny = 20, hp = 5)
+data1 = model.create_state(x, y, nu = 20, ny = 10, hp = 5)
 scaler = MinMaxScaler((0,1))
 data = scaler.fit_transform(data1)
 
-X_train = data[:5000, :-1]
-y_train = data[:5000, -1]
+T = int(len(data)/2)
+X_train = data[:T, :-1]
+y_train = data[:T, -1]
 
-X_test = data[5000:, :-1]
-y_test = data[5000:, -1]
+X_test = data[T:, :-1]
+y_test = data[T:, -1]
 
 error = model.fit(X_train, y_train)
 predicted, err = model.predict(X_test, y_test)
@@ -201,9 +197,31 @@ plt.plot(predicted, label='pred')
 plt.plot(y_test, label = 'true')
 plt.legend()
 
-plt.figure()
-plt.plot(error)
+# with open('MISO_dict.pkl', 'rb') as f:
+#     data = pickle.load(f)
 
-fig, ax = plt.subplots(2)
-ax[0].plot(np.array(model.delta_LNU).reshape(-1))
-ax[1].plot(np.asarray(model.delta_HONU).reshape(-1))
+# model = RandomLayer_LNU_HONU_NN()
+# data1 = model.create_state(np.c_[data['u1'], data['u2']], data['output'][0][:, 1], nu = 20, ny = 10, hp = 5)
+# scaler = MinMaxScaler((0,1))
+# data = scaler.fit_transform(data1)
+
+# T = int(len(data)/2)
+# X_train = data[:T, :-1]
+# y_train = data[:T, -1]
+
+# X_test = data[T:, :-1]
+# y_test = data[T:, -1]
+
+# error = model.fit(X_train, y_train)
+# predicted, err = model.predict(X_test, y_test)
+# plt.figure()
+# plt.plot(predicted, label='pred')
+# plt.plot(y_test, label = 'true')
+# plt.legend()
+
+# plt.figure()
+# plt.plot(error)
+
+# fig, ax = plt.subplots(2)
+# ax[0].plot(np.array(model.delta_LNU).reshape(-1))
+# ax[1].plot(np.asarray(model.delta_HONU).reshape(-1))
